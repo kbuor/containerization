@@ -153,8 +153,10 @@ done
 echo "Starting SSH into Master Nodes using 'root' user and running commands..."
 for NODE in "${MASTER_NODES[@]}"; do
     echo "Connecting to $NODE with user 'root'..."
-    ssh -t root@"$NODE" "$DEPLOY_CONTAINER_RUNTIME"
+    ssh -t root@"$NODE" "$DEPLOY_CONTAINER_RUNTIME" &
 done
+
+wait
 
 echo "SSH and command execution on all Master Nodes completed."
 
@@ -192,8 +194,10 @@ done
 
 for NODE in "${MASTER_NODES[@]:1}"; do
     echo "Connecting to $NODE with user 'root'..."
-    ssh -t root@"$NODE" "$JOIN_MASTER"
+    ssh -t root@"$NODE" "$JOIN_MASTER" &
 done
+
+wait
 
 # Variable to store the list of Worker Nodes
 declare -a WORKER_NODES
@@ -228,8 +232,10 @@ done
 echo "Starting SSH into Worker Nodes using 'root' user and running commands..."
 for NODE in "${WORKER_NODES[@]}"; do
     echo "Connecting to $NODE with user 'root'..."
-    ssh -t root@"$NODE" "$DEPLOY_CONTAINER_RUNTIME"
+    ssh -t root@"$NODE" "$DEPLOY_CONTAINER_RUNTIME" &
 done
+
+wait
 
 echo "SSH and command execution on all Worker Nodes completed."
 
@@ -242,5 +248,7 @@ done
 
 for NODE in "${WORKER_NODES[@]}"; do
     echo "Connecting to $NODE with user 'root'..."
-    ssh -t root@"$NODE" "$JOIN_WORKER"
+    ssh -t root@"$NODE" "$JOIN_WORKER" &
 done
+
+wait
