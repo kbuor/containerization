@@ -112,7 +112,7 @@ systemctl enable --now kubelet
 ## Bootstraping Master
 - Bootstraping master using `kubeadm`
 ```shell
-kubeadm init --pod-network-cidr 192.168.0.0/16 --kubernetes-version 1.29.1 --node-name k8s-master --apiserver-cert-extra-sans 103.141.177.132 --apiserver-cert-extra-sans k8s.kbuor.tech --apiserver-cert-extra-sans k8s-master
+kubeadm init --pod-network-cidr 192.168.0.0/16
 ```
 - Configure token
 ```shell
