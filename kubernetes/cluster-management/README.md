@@ -128,7 +128,7 @@ kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.30.3/
 ## Optional command
 - Get node information
 ```shell
-kubectl get nodes
+kubectl get nodes -o wide
 ```
 - Get node health
 ```shell
@@ -136,7 +136,7 @@ kubectl get componentstatuses
 ```
 - Get system pods status
 ```shell
-kubectl get pods --all-namespaces
+kubectl get pods --all-namespaces -o wide
 ```
 - Show join command
 ```shell
