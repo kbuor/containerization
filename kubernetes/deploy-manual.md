@@ -81,11 +81,10 @@ sudo reboot
 
 ```bash
 sudo kubeadm init \
-  --control-plane-endpoint "<ENDPOINT:PORT>" \
   --pod-network-cidr "<POD_CIDR>" \
-  --service-cidr "<SERVICE_CIDR>" \
-  --upload-certs \
-  --apiserver-cert-extra-sans "<SAN1>,<SAN2>,..."
+  --control-plane-endpoint "<ENDPOINT:PORT>" \
+  --apiserver-cert-extra-sans "<SAN1>,<SAN2>,..." \
+  --upload-certs
 ```
 
 ```bash
