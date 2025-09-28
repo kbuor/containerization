@@ -123,6 +123,7 @@ sudo chown $(id -u):$(id -g) $HOME/.kube/config
 - Apply overlay networking
 ```shell
 kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.30.3/manifests/tigera-operator.yaml
+sleep 10
 kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.30.3/manifests/custom-resources.yaml
 ```
 ## Optional command
