@@ -95,7 +95,6 @@ echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.
 - Update repository
 ```shell
 apt update -y
-reboot
 ```
 - Install dependency components
 ```shell
@@ -108,6 +107,7 @@ apt-mark hold kubelet kubeadm kubectl
 - Enable `kubelet` service
 ```shell
 systemctl enable --now kubelet
+reboot
 ```
 ## Bootstraping Master
 - Bootstraping master using `kubeadm`
