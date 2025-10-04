@@ -142,10 +142,7 @@ bash ~/cluster-certs/master-join-cmd
 
 **Trên mỗi worker node:**
 
-```bash
-scp root@<MASTER1_IP>:~/cluster-certs/node-join-cmd ~/
-bash ~/node-join-cmd
-```
+> Run join command from master
 
 ---
 
