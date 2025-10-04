@@ -116,9 +116,9 @@ kubeadm init phase upload-certs --upload-certs
 ```
 
 ```bash
-mkdir ~/cluster-certs
+mkdir -p ~/cluster-certs/etcd
 cp /etc/kubernetes/pki/{ca.*,sa.*,front-proxy-ca.*} ~/cluster-certs/
-cp /etc/kubernetes/pki/etcd/ca.* ~/cluster-certs/
+cp /etc/kubernetes/pki/etcd/ca.* ~/cluster-certs/etcd
 cp ~/master-join-cmd ~/node-join-cmd ~/cluster-certs/
 ```
 
@@ -130,7 +130,7 @@ cp ~/master-join-cmd ~/node-join-cmd ~/cluster-certs/
 
 ```bash
 scp -r root@<MASTER1_IP>:~/cluster-certs ~/
-sudo mkdir -p /etc/kubernetes/pki/etcd
+sudo mkdir -p /etc/kubernetes/pki/etcd/
 sudo cp ~/cluster-certs/*.crt ~/cluster-certs/*.key /etc/kubernetes/pki/
 sudo cp ~/cluster-certs/etcd-ca.* /etc/kubernetes/pki/etcd/
 bash ~/cluster-certs/master-join-cmd
