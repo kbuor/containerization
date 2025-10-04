@@ -110,9 +110,8 @@ kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.30.0
 kubeadm token create --print-join-command > ~/node-join-cmd
 cp ~/node-join-cmd ~/master-join-cmd
 
-kubeadm init phase upload-certs --upload-certs
-# → Lấy dòng cuối làm certificate-key và thêm vào dòng join master:
-#   --control-plane --certificate-key <KEY>
+CERT_KEY=$(kubeadm init phase upload-certs --upload-certs 2>/dev/null | grep -E '^[a-f0-9]{64}$')
+sed -i "s/\$/ --control-plane --certificate-key $CERT_KEY/" ~/master-join-cmd
 ```
 
 ```bash
