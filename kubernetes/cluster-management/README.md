@@ -296,12 +296,12 @@ kubectl create secret generic kubernetes-dashboard-certs --from-file=certs -n ku
 ## Create User and Get Token to Login
 > Create Service Account
 ```shell
-wget https://raw.githubusercontent.com/kbuor/Kubernetes/main/manifest/service-account.yaml
+wget https://raw.githubusercontent.com/kbuor/containerization/refs/heads/main/kubernetes/manifest/service-account.yaml
 kubectl apply -f service-account.yaml
 ```
 > Create ClusterRoleBinding
 ```shell
-wget https://raw.githubusercontent.com/kbuor/Kubernetes/main/manifest/cluster-role-binding.yaml
+wget https://raw.githubusercontent.com/kbuor/containerization/refs/heads/main/kubernetes/manifest/cluster-role-binding.yaml
 kubectl apply -f cluster-role-binding.yaml
 ```
 > Get token
