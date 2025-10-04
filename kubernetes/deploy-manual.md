@@ -107,18 +107,18 @@ kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.30.0
 ## 5️⃣ Tạo lệnh join và chứng chỉ
 
 ```bash
-kubeadm token create --print-join-command > ~/node-join-cmd
-cp ~/node-join-cmd ~/master-join-cmd
+kubeadm token create --print-join-command > /tmp/node-join-cmd
+cp /tmp/node-join-cmd /tmp/master-join-cmd
 
 CERT_KEY=$(kubeadm init phase upload-certs --upload-certs 2>/dev/null | grep -E '^[a-f0-9]{64}$')
-sed -i "s/\$/ --control-plane --certificate-key $CERT_KEY/" ~/master-join-cmd
+sed -i "s/\$/ --control-plane --certificate-key $CERT_KEY/" /tmp/master-join-cmd
 ```
 
 ```bash
-mkdir -p ~/cluster-certs/etcd
-cp /etc/kubernetes/pki/{ca.*,sa.*,front-proxy-ca.*} ~/cluster-certs/
-cp /etc/kubernetes/pki/etcd/ca.* ~/cluster-certs/etcd
-cp ~/master-join-cmd ~/node-join-cmd ~/cluster-certs/
+mkdir -p /tmp/cluster-certs/etcd
+cp /etc/kubernetes/pki/{ca.*,sa.*,front-proxy-ca.*} /tmp/cluster-certs/
+cp /etc/kubernetes/pki/etcd/ca.* /tmp/cluster-certs/etcd
+cp /tmp/master-join-cmd /tmp/node-join-cmd /tmp/cluster-certs/
 ```
 
 ---
@@ -128,10 +128,10 @@ cp ~/master-join-cmd ~/node-join-cmd ~/cluster-certs/
 **Trên các master node 2 và 3:**
 
 ```bash
-scp -r root@<MASTER1_IP>:~/cluster-certs ~/
+scp -r ubuntu@<MASTER1_IP>:/tmp/cluster-certs ~/
 sudo mkdir -p /etc/kubernetes/pki/etcd/
 sudo cp ~/cluster-certs/*.crt ~/cluster-certs/*.key /etc/kubernetes/pki/
-sudo cp ~/cluster-certs/etcd-ca.* /etc/kubernetes/pki/etcd/
+sudo cp ~/cluster-certs/etcd/ca.* /etc/kubernetes/pki/etcd/
 bash ~/cluster-certs/master-join-cmd
 ```
 
