@@ -151,8 +151,9 @@ scp -r ubuntu@<MASTER1_IP>:/tmp/cluster-certs ~/
 sudo mkdir -p /etc/kubernetes/pki/etcd/
 sudo cp ~/cluster-certs/*.crt ~/cluster-certs/*.key ~/cluster-certs/*.pub /etc/kubernetes/pki/
 sudo cp ~/cluster-certs/etcd/ca.* /etc/kubernetes/pki/etcd/
-bash ~/cluster-certs/master-join-cmd
 ```
+
+> Run join command for master node
 
 ---
 
@@ -160,7 +161,7 @@ bash ~/cluster-certs/master-join-cmd
 
 **Trên mỗi worker node:**
 
-> Run join command from master
+> Run join command for worker node
 
 ---
 
