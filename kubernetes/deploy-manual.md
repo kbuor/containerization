@@ -117,6 +117,7 @@ sed -i "s/\$/ --control-plane --certificate-key $CERT_KEY/" /tmp/master-join-cmd
 
 ```bash
 mkdir -p /tmp/cluster-certs/etcd
+chmod -R 777 /tmp/cluster-certs
 cp /etc/kubernetes/pki/{ca.*,sa.*,front-proxy-ca.*} /tmp/cluster-certs/
 cp /etc/kubernetes/pki/etcd/ca.* /tmp/cluster-certs/etcd
 cp /tmp/master-join-cmd /tmp/node-join-cmd /tmp/cluster-certs/
