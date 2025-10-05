@@ -12,7 +12,7 @@
 **Yêu cầu:**
 - 3 Master Nodes và >=1 Worker Node
 - Có thể SSH với quyền `root` hoặc `sudo`
-- Các node kết nối mạng nội bộ với nhau
+- Các node kết nối mạng nội bộ với nhau (kết nối bằng IP và FQDN/Hostname)
 - Swap đã tắt hoàn toàn
 - Đồng bộ thời gian (NTP)
 
