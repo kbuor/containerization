@@ -87,6 +87,23 @@ sudo kubeadm init \
   --upload-certs
 ```
 
+> Example:
+
+```shell
+sudo kubeadm init \
+  --pod-network-cidr 192.168.0.0/16 \
+  --control-plane-endpoint kubernetes.abc.com \
+  --apiserver-cert-extra-sans kubernetes.abc.com \
+  --apiserver-cert-extra-sans 172.26.9.200 \
+  --apiserver-cert-extra-sans master-01 \
+  --apiserver-cert-extra-sans master-02 \
+  --apiserver-cert-extra-sans master-03 \
+  --apiserver-cert-extra-sans 172.26.9.11 \
+  --apiserver-cert-extra-sans 172.26.9.12 \
+  --apiserver-cert-extra-sans 172.26.9.13 \
+  --upload-certs
+```
+
 ```bash
 mkdir -p $HOME/.kube
 sudo cp /etc/kubernetes/admin.conf $HOME/.kube/config
