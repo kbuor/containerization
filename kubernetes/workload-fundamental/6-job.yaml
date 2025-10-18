@@ -11,6 +11,6 @@ spec:
     spec:
       containers:
       - name: hello-container
-        image: busybox
+        image: kbuor/box
         command: ["sh", "-c", "echo Hello Kubernetes! && sleep 10"]
       restartPolicy: Never
