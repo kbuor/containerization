@@ -13,3 +13,4 @@ spec:
       - name: hello-container
         image: busybox
         command: ["sh", "-c", "echo Hello Kubernetes! && sleep 10"]
+      restartPolicy: Never
