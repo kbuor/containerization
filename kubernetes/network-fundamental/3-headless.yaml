@@ -3,6 +3,6 @@ kind: Service
 metadata:
   name: robusta-svc-03
 spec:
-  clusterip: none
+  ClusterIP: none
   selector:
     robusta: web-app
