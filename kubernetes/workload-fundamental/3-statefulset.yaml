@@ -1,0 +1,17 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: statefulset-01
+spec:
+  replicas: 3
+  template:
+    metadata:
+      labels:
+        robusta: database
+    spec:
+      containers:
+      - name: db-container
+        image: nginxdemos/hello
+  selector:
+    matchLabels:
+      robusta: database
