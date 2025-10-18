@@ -1,0 +1,16 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: daemonset-01
+spec:
+  template:
+    metadata:
+      labels:
+        robusta: acc-app
+    spec:
+      containers:
+      - name: acc-container
+        image: nginxdemos/hello
+  selector:
+    matchLabels:
+      robusta: acc-app
