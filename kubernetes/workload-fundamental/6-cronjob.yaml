@@ -1,0 +1,15 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: hello-cronjob
+spec:
+  schedule: "*/2 * * * *"     # chạy mỗi 2 phút
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: hello-container
+            image: kbuor/box
+            command: ["sh", "-c", "echo Hello from CronJob at $(date) && sleep 10"]
+          restartPolicy: OnFailure
