@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: external-01
+spec:
+  type: ExternalName
+  externalName: robusta.vn
