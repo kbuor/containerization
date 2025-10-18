@@ -1,0 +1,17 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: deployment-01
+spec:
+  replicas: 3
+  template:
+    metadata:
+      labels:
+        robusta: web-app
+    spec:
+      containers:
+      - name: web-app-container
+        image: nginxdemos/hello
+  selector:
+    matchLabels:
+      robusta: web-app
