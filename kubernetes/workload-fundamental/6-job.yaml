@@ -1,0 +1,15 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: hello-job
+spec:
+  completions: 1
+  parallelism: 1
+  template:
+    metadata:
+      name: hello-pod
+    spec:
+      containers:
+      - name: hello-container
+        image: busybox
+        command: ["sh", "-c", "echo Hello Kubernetes! && sleep 10"]
