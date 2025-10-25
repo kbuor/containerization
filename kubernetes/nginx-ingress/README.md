@@ -5,18 +5,6 @@
 kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/refs/heads/main/config/manifests/metallb-native.yaml
 ```
 
-> Deploy MetalLB CRD
-```shell
-kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/main/config/crd/bases/metallb.io_ipaddresspools.yaml
-kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/main/config/crd/bases/metallb.io_l2advertisements.yaml
-```
-
-> Configure MetalLB (`metallb-config.yaml`):
-
-```shell
-kubectl create namespace metallb-system
-```
-
 ```shell
 apiVersion: metallb.io/v1beta1
 kind: IPAddressPool
