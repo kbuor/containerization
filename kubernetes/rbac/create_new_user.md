@@ -40,7 +40,12 @@ openssl req -new -key devuser.key -out devuser.csr -subj "/CN=devuser/O=develope
 > CA file thường nằm ở `/etc/kubernetes/pki/ca.crt` và key tương ứng là `/etc/kubernetes/pki/ca.key`
 
 ```bash
-sudo openssl x509 -req -in devuser.csr   -CA /etc/kubernetes/pki/ca.crt   -CAkey /etc/kubernetes/pki/ca.key   -CAcreateserial   -out devuser.crt -days 365
+sudo openssl x509 -req -in devuser.csr \
+-CA /etc/kubernetes/pki/ca.crt \
+-CAkey /etc/kubernetes/pki/ca.key \
+-CAcreateserial \
+-out devuser.crt \
+-days 365
 ```
 
 ---
@@ -56,13 +61,24 @@ openssl x509 -in devuser.crt -text -noout
 ## Bước 5: Tạo kubeconfig cho user
 
 ```bash
-kubectl config set-cluster k8s-cluster   --certificate-authority=/etc/kubernetes/pki/ca.crt   --embed-certs=true   --server=https://<API-SERVER-IP>:6443   --kubeconfig=devuser.kubeconfig
+kubectl config set-cluster <cluster-name> \
+--certificate-authority=/etc/kubernetes/pki/ca.crt \
+--embed-certs=true \
+--server=https://<API-SERVER-IP>:6443 \
+--kubeconfig=devuser.kubeconfig
 
-kubectl config set-credentials devuser   --client-certificate=devuser.crt   --client-key=devuser.key   --embed-certs=true   --kubeconfig=devuser.kubeconfig
+kubectl config set-credentials devuser \
+--client-certificate=devuser.crt \
+--client-key=devuser.key \
+--embed-certs=true \
+--kubeconfig=devuser.kubeconfig
 
-kubectl config set-context devuser@k8s-cluster   --cluster=k8s-cluster   --user=devuser   --kubeconfig=devuser.kubeconfig
+kubectl config set-context devuser@<cluster-name> \
+--cluster=k8s-cluster \
+--user=devuser \
+--kubeconfig=devuser.kubeconfig
 
-kubectl config use-context devuser@k8s-cluster --kubeconfig=devuser.kubeconfig
+kubectl config use-context devuser@<cluster-name> --kubeconfig=devuser.kubeconfig
 ```
 
 > File `devuser.kubeconfig` là file cấu hình để user sử dụng với `kubectl`.
@@ -76,9 +92,15 @@ Ví dụ cấp quyền xem tài nguyên trong namespace `dev`:
 ```bash
 kubectl create namespace dev
 
-kubectl create role dev-viewer   --verb=get,list,watch   --resource=pods,deployments,services   -n dev
+kubectl create role dev-viewer \
+--verb=get,list,watch \
+--resource=pods,deployments,services \
+-n dev
 
-kubectl create rolebinding devuser-viewer-binding   --role=dev-viewer   --user=devuser   -n dev
+kubectl create rolebinding devuser-viewer-binding \
+--role=dev-viewer \
+--user=devuser \
+-n dev
 ```
 
 ---
