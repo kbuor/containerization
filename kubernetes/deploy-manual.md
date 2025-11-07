@@ -47,7 +47,8 @@ leapsectz right/UTC
 EOF
 systemctl restart chrony
 systemctl enable chrony
-echo "127.0.1.1 $HOSTNAME" >> /etc/hosts
+sudo sed -i "2i 127.0.1.1 $HOSTNAME" /etc/hosts
+sudo sed -i '3i ' /etc/hosts
 sudo apt update -y && apt upgrade -y
 sudo swapoff -a
 sudo sed -i '/ swap / s/^/#/' /etc/fstab
