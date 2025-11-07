@@ -45,11 +45,11 @@ rtcsync
 makestep 1 3
 leapsectz right/UTC
 EOF
-systemctl restart chrony
-systemctl enable chrony
+sudo systemctl restart chrony
+sudo systemctl enable chrony
 sudo sed -i "2i 127.0.1.1 $HOSTNAME" /etc/hosts
 sudo sed -i '3i ' /etc/hosts
-sudo apt update -y && apt upgrade -y
+sudo apt update -y && sudo apt upgrade -y
 sudo swapoff -a
 sudo sed -i '/ swap / s/^/#/' /etc/fstab
 
