@@ -23,7 +23,32 @@
 **Thực hiện các bước sau trên từng node (Master & Worker):**
 
 ```bash
-sudo apt update -y
+rm -rf /etc/netplan/50*
+mv /etc/netplan/99* eoh.yaml
+sudo systemctl restart systemd-resolve
+sudo systemctl enable systemd-resolve
+sudo ln -sf /var/run/systemd/resolve/resolv.conf /etc/resolv.conf
+sudo netplan apply
+sudo timedatectl set-timezone Asia/Ho_Chi_Minh
+sudo apt install -y chrony
+cat <<'EOF' | sudo tee /etc/chrony/chrony.conf
+confdir /etc/chrony/conf.d
+server 0.asia.pool.ntp.org iburst
+sourcedir /run/chrony-dhcp
+sourcedir /etc/chrony/sources.d
+keyfile /etc/chrony/chrony.keys
+driftfile /var/lib/chrony/chrony.drift
+ntsdumpdir /var/lib/chrony
+logdir /var/log/chrony
+maxupdateskew 100.0
+rtcsync
+makestep 1 3
+leapsectz right/UTC
+EOF
+systemctl restart chrony
+systemctl enable chrony
+echo "127.0.1.1 $HOSTNAME" >> /etc/hosts
+sudo apt update -y && apt upgrade -y
 sudo swapoff -a
 sudo sed -i '/ swap / s/^/#/' /etc/fstab
 
