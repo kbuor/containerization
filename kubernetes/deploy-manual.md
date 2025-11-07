@@ -24,7 +24,7 @@
 
 ```bash
 rm -rf /etc/netplan/50*
-mv /etc/netplan/99* eoh.yaml
+mv /etc/netplan/99* /etc/netplan/eoh.yaml
 sudo systemctl restart systemd-resolved
 sudo systemctl enable systemd-resolved
 sudo ln -sf /var/run/systemd/resolve/resolv.conf /etc/resolv.conf
