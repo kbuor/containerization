@@ -25,8 +25,8 @@
 ```bash
 rm -rf /etc/netplan/50*
 mv /etc/netplan/99* eoh.yaml
-sudo systemctl restart systemd-resolve
-sudo systemctl enable systemd-resolve
+sudo systemctl restart systemd-resolved
+sudo systemctl enable systemd-resolved
 sudo ln -sf /var/run/systemd/resolve/resolv.conf /etc/resolv.conf
 sudo netplan apply
 sudo timedatectl set-timezone Asia/Ho_Chi_Minh
