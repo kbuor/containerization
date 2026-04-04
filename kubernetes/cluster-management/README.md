@@ -271,8 +271,7 @@ Deploy the dashboard for kubernetes
 
 > Download the dashboard.yaml manifest
 ```shell
-wget https://raw.githubusercontent.com/kbuor/Kubernetes/main/manifest/dashboard.yaml
-```
+wget https://raw.githubusercontent.com/kbuor/containerization/refs/heads/main/kubernetes/manifest/dashboard.yaml
 
 > Create the workload and services
 ```shell
