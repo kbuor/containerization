@@ -2130,6 +2130,1931 @@ Host: app2.lab.local
 
 Đây là lý do Ingress rất phù hợp để publish nhiều ứng dụng web trong cùng một cluster.
 
+## Phần bổ sung chuyên sâu - Ingress HTTPS/TLS, pathType và path-based routing
+
+Phần này bổ sung thêm cho Buổi 06 để học viên hiểu kỹ hơn ba nhóm vấn đề thường gặp khi đưa ứng dụng web ra ngoài Kubernetes:
+
+- Ingress dùng HTTPS, SSL/TLS và TLS Secret.
+- Routing theo `path` với `pathType: Exact`, `Prefix`, `ImplementationSpecific`.
+- Demo nhiều backend dùng chung một domain/IP nhưng tách traffic theo đường dẫn như `/`, `/api`, `/admin`.
+
+Nội dung này nên được dạy sau khi học viên đã hoàn tất các phần:
+
+- Cài Helm.
+- Cài MetalLB.
+- Cài Ingress NGINX Controller.
+- Tạo được Ingress HTTP cơ bản.
+- Biết Service `ClusterIP` dùng để đứng trước Pod backend.
+
+### A. Hiểu đúng về HTTPS, SSL và TLS trong Ingress
+
+Trong thực tế, nhiều người vẫn nói “cài SSL cho website”, “SSL certificate”, hoặc “Ingress SSL”. Về mặt kỹ thuật hiện đại, giao thức đang dùng là TLS, không còn là SSL cũ.
+
+Trong Kubernetes Ingress, trường cấu hình chính thức là:
+
+```yaml
+spec:
+  tls:
+```
+
+Vì vậy khi làm lab hoặc triển khai thực tế, nên hiểu như sau:
+
+```text
+Cách gọi phổ biến:
+  SSL certificate
+  SSL for website
+  HTTPS SSL
+
+Ý nghĩa kỹ thuật hiện đại:
+  TLS certificate
+  HTTPS sử dụng TLS
+  TLS termination tại Ingress Controller
+```
+
+Trong bài này, ta vẫn có thể nói “SSL/TLS” để học viên dễ liên hệ với cách gọi ngoài thực tế, nhưng khi đọc YAML thì cần nhớ Kubernetes dùng khái niệm `tls`.
+
+### B. HTTPS qua Ingress hoạt động như thế nào?
+
+Khi một client truy cập:
+
+```text
+https://web.lab.local/
+```
+
+Luồng xử lý trong mô hình lab là:
+
+```text
+Client / Browser
+      |
+      | HTTPS TCP/443
+      | TLS handshake
+      v
+MetalLB External IP
+10.10.10.240
+      |
+      v
+Service LoadBalancer
+ingress-nginx-controller
+      |
+      v
+Ingress NGINX Controller
+      |
+      | Đọc TLS Secret
+      | Terminate TLS tại đây
+      |
+      | HTTP nội bộ
+      v
+Service ClusterIP backend
+      |
+      v
+Pod ứng dụng
+```
+
+Điểm quan trọng:
+
+- Certificate không nằm trong Pod ứng dụng.
+- Certificate nằm trong Kubernetes Secret.
+- Secret phải nằm cùng namespace với Ingress object.
+- Ingress NGINX Controller đọc Secret đó để phục vụ HTTPS.
+- Client nói chuyện HTTPS với Ingress Controller.
+- Ingress Controller có thể nói chuyện HTTP với backend Service.
+- Đây gọi là TLS termination tại Ingress Controller.
+
+Mô hình này rất phổ biến vì:
+
+- Ứng dụng backend không cần tự quản lý certificate.
+- Việc gia hạn/thay certificate được gom ở tầng Ingress.
+- Nhiều ứng dụng web có thể dùng chung Ingress Controller.
+- Dễ áp dụng policy redirect HTTP sang HTTPS.
+
+### C. TLS Secret trong Kubernetes
+
+TLS Secret là Secret có type:
+
+```yaml
+type: kubernetes.io/tls
+```
+
+Bên trong Secret có hai key dữ liệu bắt buộc:
+
+```text
+tls.crt
+tls.key
+```
+
+Trong đó:
+
+- `tls.crt`: certificate public.
+- `tls.key`: private key tương ứng với certificate.
+
+Tạo TLS Secret bằng `kubectl`:
+
+```bash
+kubectl create secret tls web-lab-local-tls \
+  --cert=web.lab.local.crt \
+  --key=web.lab.local.key \
+  -n lesson-06
+```
+
+Kiểm tra:
+
+```bash
+kubectl get secret web-lab-local-tls -n lesson-06
+kubectl get secret web-lab-local-tls -n lesson-06 -o yaml
+```
+
+Kết quả cần thấy:
+
+```yaml
+type: kubernetes.io/tls
+```
+
+Lưu ý quan trọng:
+
+```text
+Ingress namespace: lesson-06
+TLS Secret namespace: lesson-06
+```
+
+Nếu Ingress ở namespace `lesson-06` nhưng Secret lại nằm ở namespace `default`, Ingress NGINX sẽ không dùng được Secret đó.
+
+### D. Certificate phải khớp domain
+
+Khi tạo certificate cho HTTPS, certificate phải chứa domain mà client truy cập.
+
+Ví dụ client truy cập:
+
+```text
+https://web.lab.local/
+```
+
+Certificate nên có SAN:
+
+```text
+DNS:web.lab.local
+```
+
+Trong lab, tạo self-signed certificate:
+
+```bash
+openssl req -x509 -nodes -days 365 \
+  -newkey rsa:2048 \
+  -keyout web.lab.local.key \
+  -out web.lab.local.crt \
+  -subj "/CN=web.lab.local/O=Kubernetes Lab" \
+  -addext "subjectAltName=DNS:web.lab.local"
+```
+
+Kiểm tra certificate:
+
+```bash
+openssl x509 -in web.lab.local.crt -noout -text | grep -A2 "Subject Alternative Name"
+```
+
+Kết quả kỳ vọng:
+
+```text
+DNS:web.lab.local
+```
+
+Nếu certificate không có SAN đúng domain, browser hoặc `curl` sẽ báo lỗi certificate name mismatch.
+
+### E. Ingress HTTPS manifest đầy đủ
+
+Ví dụ Ingress HTTPS cơ bản:
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: lesson-06-web-https
+  namespace: lesson-06
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - web.lab.local
+      secretName: web-lab-local-tls
+  rules:
+    - host: web.lab.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: lesson-06-web-svc
+                port:
+                  number: 80
+```
+
+Giải thích nhanh:
+
+```yaml
+ingressClassName: nginx
+```
+
+Ingress này được xử lý bởi Ingress NGINX Controller.
+
+```yaml
+tls:
+  - hosts:
+      - web.lab.local
+    secretName: web-lab-local-tls
+```
+
+Khi client truy cập HTTPS tới `web.lab.local`, Ingress Controller dùng Secret `web-lab-local-tls` để terminate TLS.
+
+```yaml
+rules:
+  - host: web.lab.local
+```
+
+Rule routing áp dụng cho request có HTTP Host header là `web.lab.local`.
+
+```yaml
+path: /
+pathType: Prefix
+```
+
+Mọi path bắt đầu từ `/` đều đi vào backend này, trừ khi có rule khác cụ thể hơn.
+
+```yaml
+service:
+  name: lesson-06-web-svc
+  port:
+    number: 80
+```
+
+Sau khi terminate HTTPS, Ingress chuyển request vào Service `lesson-06-web-svc` port 80.
+
+### F. HTTP redirect sang HTTPS
+
+Với Ingress NGINX, khi Ingress có block `tls`, controller thường redirect HTTP sang HTTPS.
+
+Test:
+
+```bash
+curl -I --resolve web.lab.local:80:10.10.10.240 http://web.lab.local/
+```
+
+Kết quả thường gặp:
+
+```text
+HTTP/1.1 308 Permanent Redirect
+Location: https://web.lab.local/
+```
+
+Test HTTPS:
+
+```bash
+curl -k -I --resolve web.lab.local:443:10.10.10.240 https://web.lab.local/
+```
+
+Kết quả kỳ vọng:
+
+```text
+HTTP/2 200
+```
+
+Hoặc:
+
+```text
+HTTP/1.1 200 OK
+```
+
+Tùy phiên bản controller, cấu hình HTTP/2 và client.
+
+Nếu muốn tắt redirect cho một Ingress cụ thể:
+
+```yaml
+metadata:
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+```
+
+Ví dụ đầy đủ:
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: lesson-06-web-https
+  namespace: lesson-06
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - web.lab.local
+      secretName: web-lab-local-tls
+  rules:
+    - host: web.lab.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: lesson-06-web-svc
+                port:
+                  number: 80
+```
+
+Trong production, thường nên bật redirect HTTP sang HTTPS để ép người dùng đi qua kênh mã hóa.
+
+### G. Nhiều domain dùng nhiều certificate
+
+Một Ingress có thể khai báo nhiều host và nhiều TLS Secret.
+
+Ví dụ:
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: multi-tls-ingress
+  namespace: lesson-06
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - app1.lab.local
+      secretName: app1-lab-local-tls
+    - hosts:
+        - app2.lab.local
+      secretName: app2-lab-local-tls
+  rules:
+    - host: app1.lab.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: app1-svc
+                port:
+                  number: 80
+    - host: app2.lab.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: app2-svc
+                port:
+                  number: 80
+```
+
+Khi client truy cập HTTPS, TLS handshake dùng SNI để báo cho server biết domain client muốn truy cập. Ingress Controller dựa vào domain đó để chọn certificate phù hợp.
+
+Mô hình:
+
+```text
+https://app1.lab.local
+  -> dùng Secret app1-lab-local-tls
+  -> route app1-svc
+
+https://app2.lab.local
+  -> dùng Secret app2-lab-local-tls
+  -> route app2-svc
+```
+
+### H. Một certificate dùng cho nhiều domain
+
+Có thể dùng một certificate chứa nhiều SAN:
+
+```text
+DNS:app1.lab.local
+DNS:app2.lab.local
+DNS:web.lab.local
+```
+
+Hoặc wildcard certificate:
+
+```text
+DNS:*.lab.local
+```
+
+Khi đó nhiều host có thể dùng chung một TLS Secret.
+
+Ví dụ:
+
+```yaml
+tls:
+  - hosts:
+      - app1.lab.local
+      - app2.lab.local
+      - web.lab.local
+    secretName: wildcard-lab-local-tls
+```
+
+Lưu ý:
+
+- Wildcard `*.lab.local` chỉ match một cấp như `app1.lab.local`.
+- Wildcard này không match `api.dev.lab.local` vì đó là nhiều hơn một DNS label phía trước `lab.local`.
+
+### I. Path routing trong Ingress
+
+Ingress không chỉ route theo domain, mà còn route theo URL path.
+
+Ví dụ một domain duy nhất:
+
+```text
+https://portal.lab.local/
+https://portal.lab.local/api
+https://portal.lab.local/admin
+```
+
+Có thể route đến ba Service khác nhau:
+
+```text
+/       -> frontend-svc
+/api    -> api-svc
+/admin  -> admin-svc
+```
+
+Luồng:
+
+```text
+Client
+  |
+  | GET /api/v1/users
+  | Host: portal.lab.local
+  v
+Ingress NGINX Controller
+  |
+  | rule host = portal.lab.local
+  | path = /api
+  v
+api-svc
+  |
+  v
+Pod API
+```
+
+Điểm cần nhớ:
+
+- Ingress route theo HTTP Host header và URL path.
+- Backend của Ingress vẫn là Service.
+- Ingress không route trực tiếp vào Pod.
+- Các path cụ thể hơn thường được ưu tiên hơn path tổng quát `/`.
+
+### J. Ba loại pathType trong Kubernetes Ingress
+
+Từ Kubernetes `networking.k8s.io/v1`, mỗi path bắt buộc phải có `pathType`.
+
+Có ba loại chính:
+
+```text
+Exact
+Prefix
+ImplementationSpecific
+```
+
+#### J.1. pathType Exact
+
+`Exact` match chính xác toàn bộ path, có phân biệt chữ hoa/chữ thường.
+
+Ví dụ:
+
+```yaml
+path: /healthz
+pathType: Exact
+```
+
+Match:
+
+```text
+/healthz
+```
+
+Không match:
+
+```text
+/healthz/
+/healthz/live
+/Healthz
+```
+
+Dùng khi:
+
+- Health endpoint cụ thể.
+- Callback endpoint cần đúng path.
+- Route đặc biệt không muốn match các subpath phía sau.
+
+#### J.2. pathType Prefix
+
+`Prefix` match theo từng phần tử path, phân tách bởi dấu `/`.
+
+Ví dụ:
+
+```yaml
+path: /api
+pathType: Prefix
+```
+
+Match:
+
+```text
+/api
+/api/
+/api/v1
+/api/v1/users
+```
+
+Không nên hiểu nhầm là string prefix thuần túy.
+
+Theo ý nghĩa Kubernetes Ingress, `/api` không nên match:
+
+```text
+/apix
+/api-v2
+```
+
+Vì `/api` là một path element riêng, còn `/apix` là element khác.
+
+Dùng khi:
+
+- Muốn route một nhóm URL vào cùng backend.
+- Ví dụ `/api`, `/admin`, `/static`, `/media`.
+- Ứng dụng backend tự hiểu subpath phía sau.
+
+#### J.3. pathType ImplementationSpecific
+
+`ImplementationSpecific` nghĩa là cách match phụ thuộc vào Ingress Controller.
+
+Với Ingress NGINX, loại này thường gặp khi dùng regex path hoặc một số annotation nâng cao.
+
+Ví dụ regex:
+
+```yaml
+metadata:
+  annotations:
+    nginx.ingress.kubernetes.io/use-regex: "true"
+spec:
+  rules:
+    - host: rewrite.lab.local
+      http:
+        paths:
+          - path: /backend(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: path-echo-svc
+                port:
+                  number: 80
+```
+
+Dùng khi:
+
+- Cần regex.
+- Cần rewrite path nâng cao.
+- Chấp nhận cấu hình phụ thuộc vào Ingress NGINX.
+
+Không nên dùng `ImplementationSpecific` cho bài lab cơ bản nếu `Exact` hoặc `Prefix` đã đủ.
+
+### K. Thứ tự ưu tiên khi nhiều path cùng match
+
+Khi nhiều path cùng match một request, Kubernetes ưu tiên:
+
+1. Path dài hơn, cụ thể hơn.
+2. Nếu độ dài tương đương, `Exact` được ưu tiên hơn `Prefix`.
+
+Ví dụ:
+
+```yaml
+paths:
+  - path: /api/v1
+    pathType: Prefix
+    backend: api-v1-svc
+
+  - path: /api
+    pathType: Prefix
+    backend: api-svc
+
+  - path: /
+    pathType: Prefix
+    backend: frontend-svc
+```
+
+Request:
+
+```text
+/api/v1/users
+```
+
+Sẽ đi vào:
+
+```text
+api-v1-svc
+```
+
+Không đi vào:
+
+```text
+api-svc
+frontend-svc
+```
+
+Vì `/api/v1` cụ thể hơn `/api`, và `/api` cụ thể hơn `/`.
+
+Ví dụ `Exact` và `Prefix` cùng tồn tại:
+
+```yaml
+paths:
+  - path: /healthz
+    pathType: Exact
+    backend: health-svc
+
+  - path: /healthz
+    pathType: Prefix
+    backend: api-svc
+```
+
+Request:
+
+```text
+/healthz
+```
+
+Đi vào:
+
+```text
+health-svc
+```
+
+Request:
+
+```text
+/healthz/live
+```
+
+Đi vào:
+
+```text
+api-svc
+```
+
+### L. Demo bổ sung 01 - Path routing bằng Prefix
+
+#### L.1. Mục tiêu
+
+Triển khai ba backend:
+
+```text
+frontend
+api
+admin
+```
+
+Dùng một domain:
+
+```text
+path.lab.local
+```
+
+Dùng một IP Ingress:
+
+```text
+10.10.10.240
+```
+
+Route theo path:
+
+```text
+http://path.lab.local/              -> frontend-svc
+http://path.lab.local/api           -> api-svc
+http://path.lab.local/api/v1/users  -> api-svc
+http://path.lab.local/admin         -> admin-svc
+http://path.lab.local/admin/users   -> admin-svc
+```
+
+#### L.2. Tạo namespace
+
+```bash
+kubectl create namespace ingress-path-demo
+```
+
+#### L.3. Tạo ba ứng dụng demo
+
+Dùng image `hashicorp/http-echo` để backend trả về nội dung text đơn giản.
+
+Tạo file:
+
+```bash
+cat <<'EOF' > path-demo-apps.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: ingress-path-demo
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      containers:
+        - name: http-echo
+          image: hashicorp/http-echo:1.0
+          args:
+            - "-listen=:5678"
+            - "-text=frontend service - root path"
+          ports:
+            - containerPort: 5678
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-svc
+  namespace: ingress-path-demo
+spec:
+  type: ClusterIP
+  selector:
+    app: frontend
+  ports:
+    - name: http
+      port: 80
+      targetPort: 5678
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: ingress-path-demo
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+    spec:
+      containers:
+        - name: http-echo
+          image: hashicorp/http-echo:1.0
+          args:
+            - "-listen=:5678"
+            - "-text=api service - /api prefix"
+          ports:
+            - containerPort: 5678
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-svc
+  namespace: ingress-path-demo
+spec:
+  type: ClusterIP
+  selector:
+    app: api
+  ports:
+    - name: http
+      port: 80
+      targetPort: 5678
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: admin
+  namespace: ingress-path-demo
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: admin
+  template:
+    metadata:
+      labels:
+        app: admin
+    spec:
+      containers:
+        - name: http-echo
+          image: hashicorp/http-echo:1.0
+          args:
+            - "-listen=:5678"
+            - "-text=admin service - /admin prefix"
+          ports:
+            - containerPort: 5678
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: admin-svc
+  namespace: ingress-path-demo
+spec:
+  type: ClusterIP
+  selector:
+    app: admin
+  ports:
+    - name: http
+      port: 80
+      targetPort: 5678
+EOF
+```
+
+Apply:
+
+```bash
+kubectl apply -f path-demo-apps.yaml
+```
+
+Kiểm tra:
+
+```bash
+kubectl get pods -n ingress-path-demo -o wide
+kubectl get svc -n ingress-path-demo
+kubectl get endpointslice -n ingress-path-demo
+```
+
+#### L.4. Tạo Ingress path Prefix
+
+Tạo file:
+
+```bash
+cat <<'EOF' > path-prefix-ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: path-prefix-ingress
+  namespace: ingress-path-demo
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: path.lab.local
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: api-svc
+                port:
+                  number: 80
+          - path: /admin
+            pathType: Prefix
+            backend:
+              service:
+                name: admin-svc
+                port:
+                  number: 80
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend-svc
+                port:
+                  number: 80
+EOF
+```
+
+Apply:
+
+```bash
+kubectl apply -f path-prefix-ingress.yaml
+```
+
+Kiểm tra:
+
+```bash
+kubectl get ingress -n ingress-path-demo
+kubectl describe ingress path-prefix-ingress -n ingress-path-demo
+```
+
+#### L.5. Test bằng curl --resolve
+
+Lấy IP Ingress:
+
+```bash
+export INGRESS_IP=$(kubectl get svc ingress-nginx-controller \
+  -n ingress-nginx \
+  -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+
+echo $INGRESS_IP
+```
+
+Test root path:
+
+```bash
+curl --resolve path.lab.local:80:$INGRESS_IP http://path.lab.local/
+```
+
+Kết quả kỳ vọng:
+
+```text
+frontend service - root path
+```
+
+Test `/api`:
+
+```bash
+curl --resolve path.lab.local:80:$INGRESS_IP http://path.lab.local/api
+curl --resolve path.lab.local:80:$INGRESS_IP http://path.lab.local/api/v1/users
+```
+
+Kết quả kỳ vọng:
+
+```text
+api service - /api prefix
+```
+
+Test `/admin`:
+
+```bash
+curl --resolve path.lab.local:80:$INGRESS_IP http://path.lab.local/admin
+curl --resolve path.lab.local:80:$INGRESS_IP http://path.lab.local/admin/users
+```
+
+Kết quả kỳ vọng:
+
+```text
+admin service - /admin prefix
+```
+
+Test path không match `/api` theo path element:
+
+```bash
+curl -i --resolve path.lab.local:80:$INGRESS_IP http://path.lab.local/apix
+```
+
+Trong cách hiểu chuẩn của Kubernetes `Prefix`, `/apix` không phải là subpath của `/api`. Nếu không có rule nào cụ thể hơn, request sẽ rơi về rule `/` và đi vào frontend.
+
+Kết quả kỳ vọng:
+
+```text
+frontend service - root path
+```
+
+#### L.6. Vì sao path `/` nên để cuối?
+
+Trong YAML trên, ta đặt:
+
+```yaml
+- path: /api
+- path: /admin
+- path: /
+```
+
+Mục đích là để người học dễ đọc từ rule cụ thể đến rule tổng quát.
+
+Về nguyên tắc matching, path cụ thể hơn được ưu tiên. Tuy nhiên khi dạy học, nên luôn viết rule tổng quát `/` ở cuối để tránh học viên hiểu nhầm rằng `/` sẽ “ăn hết” mọi request trước.
+
+### M. Demo bổ sung 02 - Kết hợp HTTPS + path Prefix
+
+#### M.1. Mục tiêu
+
+Dùng lại ba backend ở Demo bổ sung 01, nhưng publish bằng HTTPS:
+
+```text
+https://path.lab.local/
+https://path.lab.local/api
+https://path.lab.local/admin
+```
+
+TLS terminate tại Ingress NGINX Controller.
+
+#### M.2. Tạo certificate cho path.lab.local
+
+```bash
+openssl req -x509 -nodes -days 365 \
+  -newkey rsa:2048 \
+  -keyout path.lab.local.key \
+  -out path.lab.local.crt \
+  -subj "/CN=path.lab.local/O=Kubernetes Lab" \
+  -addext "subjectAltName=DNS:path.lab.local"
+```
+
+Tạo TLS Secret:
+
+```bash
+kubectl create secret tls path-lab-local-tls \
+  --cert=path.lab.local.crt \
+  --key=path.lab.local.key \
+  -n ingress-path-demo
+```
+
+Kiểm tra:
+
+```bash
+kubectl get secret path-lab-local-tls -n ingress-path-demo
+kubectl get secret path-lab-local-tls -n ingress-path-demo -o jsonpath='{.type}'; echo
+```
+
+Kết quả:
+
+```text
+kubernetes.io/tls
+```
+
+#### M.3. Cập nhật Ingress có TLS
+
+Tạo file:
+
+```bash
+cat <<'EOF' > path-prefix-https-ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: path-prefix-ingress
+  namespace: ingress-path-demo
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - path.lab.local
+      secretName: path-lab-local-tls
+  rules:
+    - host: path.lab.local
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: api-svc
+                port:
+                  number: 80
+          - path: /admin
+            pathType: Prefix
+            backend:
+              service:
+                name: admin-svc
+                port:
+                  number: 80
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend-svc
+                port:
+                  number: 80
+EOF
+```
+
+Apply:
+
+```bash
+kubectl apply -f path-prefix-https-ingress.yaml
+```
+
+Kiểm tra:
+
+```bash
+kubectl get ingress -n ingress-path-demo
+kubectl describe ingress path-prefix-ingress -n ingress-path-demo
+```
+
+#### M.4. Test HTTPS
+
+Test root path:
+
+```bash
+curl -k --resolve path.lab.local:443:$INGRESS_IP https://path.lab.local/
+```
+
+Test API path:
+
+```bash
+curl -k --resolve path.lab.local:443:$INGRESS_IP https://path.lab.local/api
+curl -k --resolve path.lab.local:443:$INGRESS_IP https://path.lab.local/api/v1/users
+```
+
+Test admin path:
+
+```bash
+curl -k --resolve path.lab.local:443:$INGRESS_IP https://path.lab.local/admin
+curl -k --resolve path.lab.local:443:$INGRESS_IP https://path.lab.local/admin/users
+```
+
+Kiểm tra redirect HTTP sang HTTPS:
+
+```bash
+curl -I --resolve path.lab.local:80:$INGRESS_IP http://path.lab.local/api
+```
+
+Kết quả thường gặp:
+
+```text
+HTTP/1.1 308 Permanent Redirect
+Location: https://path.lab.local/api
+```
+
+Kiểm tra certificate đang được trả ra:
+
+```bash
+openssl s_client -connect $INGRESS_IP:443 -servername path.lab.local </dev/null 2>/dev/null \
+  | openssl x509 -noout -subject -issuer -dates
+```
+
+Kết quả cần thấy certificate có subject tương ứng với `path.lab.local`.
+
+### N. Demo bổ sung 03 - Exact so với Prefix
+
+#### N.1. Mục tiêu
+
+Chứng minh:
+
+- `/healthz` với `Exact` chỉ match đúng `/healthz`.
+- `/healthz/live` không match `Exact`.
+- Nếu có thêm `/healthz` với `Prefix`, thì `/healthz/live` có thể đi vào backend Prefix.
+- Khi request đúng `/healthz`, `Exact` được ưu tiên hơn `Prefix`.
+
+#### N.2. Tạo hai backend
+
+Tạo file:
+
+```bash
+cat <<'EOF' > exact-prefix-apps.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: health-exact
+  namespace: ingress-path-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: health-exact
+  template:
+    metadata:
+      labels:
+        app: health-exact
+    spec:
+      containers:
+        - name: http-echo
+          image: hashicorp/http-echo:1.0
+          args:
+            - "-listen=:5678"
+            - "-text=EXACT backend: /healthz only"
+          ports:
+            - containerPort: 5678
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: health-exact-svc
+  namespace: ingress-path-demo
+spec:
+  type: ClusterIP
+  selector:
+    app: health-exact
+  ports:
+    - name: http
+      port: 80
+      targetPort: 5678
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: health-prefix
+  namespace: ingress-path-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: health-prefix
+  template:
+    metadata:
+      labels:
+        app: health-prefix
+    spec:
+      containers:
+        - name: http-echo
+          image: hashicorp/http-echo:1.0
+          args:
+            - "-listen=:5678"
+            - "-text=PREFIX backend: /healthz and subpaths"
+          ports:
+            - containerPort: 5678
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: health-prefix-svc
+  namespace: ingress-path-demo
+spec:
+  type: ClusterIP
+  selector:
+    app: health-prefix
+  ports:
+    - name: http
+      port: 80
+      targetPort: 5678
+EOF
+```
+
+Apply:
+
+```bash
+kubectl apply -f exact-prefix-apps.yaml
+```
+
+#### N.3. Tạo Ingress Exact và Prefix
+
+Tạo file:
+
+```bash
+cat <<'EOF' > exact-prefix-ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: exact-prefix-ingress
+  namespace: ingress-path-demo
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: exact.lab.local
+      http:
+        paths:
+          - path: /healthz
+            pathType: Exact
+            backend:
+              service:
+                name: health-exact-svc
+                port:
+                  number: 80
+          - path: /healthz
+            pathType: Prefix
+            backend:
+              service:
+                name: health-prefix-svc
+                port:
+                  number: 80
+EOF
+```
+
+Apply:
+
+```bash
+kubectl apply -f exact-prefix-ingress.yaml
+```
+
+Kiểm tra:
+
+```bash
+kubectl describe ingress exact-prefix-ingress -n ingress-path-demo
+```
+
+#### N.4. Test Exact và Prefix
+
+Request đúng `/healthz`:
+
+```bash
+curl --resolve exact.lab.local:80:$INGRESS_IP http://exact.lab.local/healthz
+```
+
+Kết quả kỳ vọng:
+
+```text
+EXACT backend: /healthz only
+```
+
+Request subpath `/healthz/live`:
+
+```bash
+curl --resolve exact.lab.local:80:$INGRESS_IP http://exact.lab.local/healthz/live
+```
+
+Kết quả kỳ vọng:
+
+```text
+PREFIX backend: /healthz and subpaths
+```
+
+Request sai chữ hoa/thường:
+
+```bash
+curl -i --resolve exact.lab.local:80:$INGRESS_IP http://exact.lab.local/Healthz
+```
+
+Kết quả kỳ vọng là không match rule `/healthz`, vì `Exact` và `Prefix` đều case-sensitive theo Kubernetes Ingress path matching.
+
+### O. Demo bổ sung 04 - Rewrite path với Ingress NGINX
+
+#### O.1. Khi nào cần rewrite path?
+
+Không phải ứng dụng nào cũng biết mình đang được expose dưới subpath.
+
+Ví dụ bên ngoài muốn expose:
+
+```text
+https://rewrite.lab.local/backend/api/users
+```
+
+Nhưng backend app thật ra chỉ hiểu:
+
+```text
+/api/users
+```
+
+Lúc này ta cần rewrite:
+
+```text
+/backend/api/users -> /api/users
+```
+
+Với Ingress NGINX, có thể dùng annotation:
+
+```yaml
+nginx.ingress.kubernetes.io/rewrite-target: /$2
+nginx.ingress.kubernetes.io/use-regex: "true"
+```
+
+Lưu ý: rewrite là tính năng phụ thuộc Ingress NGINX, không phải hành vi portable giữa mọi Ingress Controller.
+
+#### O.2. Tạo backend echo request URI bằng nginx
+
+Backend này trả về URI mà nó nhận được sau khi đi qua Ingress. Nhờ vậy học viên thấy được rewrite có tác dụng hay không.
+
+Tạo file:
+
+```bash
+cat <<'EOF' > rewrite-echo-app.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rewrite-echo-nginx-conf
+  namespace: ingress-path-demo
+data:
+  default.conf: |
+    server {
+      listen 80;
+
+      location / {
+        default_type text/plain;
+        return 200 "backend received uri=$request_uri\nhost=$host\n";
+      }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rewrite-echo
+  namespace: ingress-path-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rewrite-echo
+  template:
+    metadata:
+      labels:
+        app: rewrite-echo
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.27
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - name: nginx-conf
+              mountPath: /etc/nginx/conf.d/default.conf
+              subPath: default.conf
+      volumes:
+        - name: nginx-conf
+          configMap:
+            name: rewrite-echo-nginx-conf
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rewrite-echo-svc
+  namespace: ingress-path-demo
+spec:
+  type: ClusterIP
+  selector:
+    app: rewrite-echo
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+EOF
+```
+
+Apply:
+
+```bash
+kubectl apply -f rewrite-echo-app.yaml
+```
+
+Kiểm tra:
+
+```bash
+kubectl get pods -n ingress-path-demo -l app=rewrite-echo
+kubectl get svc rewrite-echo-svc -n ingress-path-demo
+```
+
+#### O.3. Tạo Ingress rewrite
+
+Tạo file:
+
+```bash
+cat <<'EOF' > rewrite-ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: rewrite-ingress
+  namespace: ingress-path-demo
+  annotations:
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: rewrite.lab.local
+      http:
+        paths:
+          - path: /backend(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: rewrite-echo-svc
+                port:
+                  number: 80
+EOF
+```
+
+Apply:
+
+```bash
+kubectl apply -f rewrite-ingress.yaml
+```
+
+#### O.4. Test rewrite
+
+Test request vào `/backend`:
+
+```bash
+curl --resolve rewrite.lab.local:80:$INGRESS_IP http://rewrite.lab.local/backend
+```
+
+Kết quả kỳ vọng backend nhận URI:
+
+```text
+backend received uri=/
+```
+
+Test request vào `/backend/api/users`:
+
+```bash
+curl --resolve rewrite.lab.local:80:$INGRESS_IP http://rewrite.lab.local/backend/api/users
+```
+
+Kết quả kỳ vọng backend nhận URI:
+
+```text
+backend received uri=/api/users
+```
+
+Test query string:
+
+```bash
+curl --resolve rewrite.lab.local:80:$INGRESS_IP "http://rewrite.lab.local/backend/api/users?id=100"
+```
+
+Kết quả kỳ vọng backend nhận URI gần như:
+
+```text
+backend received uri=/api/users?id=100
+```
+
+#### O.5. Giải thích regex `/backend(/|$)(.*)`
+
+Path:
+
+```text
+/backend(/|$)(.*)
+```
+
+Có thể hiểu:
+
+```text
+/backend
+```
+
+Là prefix bên ngoài muốn public.
+
+```text
+(/|$)
+```
+
+Sau `/backend` có thể là dấu `/` hoặc kết thúc chuỗi.
+
+```text
+(.*)
+```
+
+Phần còn lại của path, được lưu vào capture group số 2.
+
+Annotation:
+
+```yaml
+nginx.ingress.kubernetes.io/rewrite-target: /$2
+```
+
+Nghĩa là phần path gửi vào backend sẽ thành:
+
+```text
+/<capture group 2>
+```
+
+Ví dụ:
+
+```text
+Request ngoài: /backend/api/users
+Capture $2:    api/users
+Rewrite thành: /api/users
+```
+
+### P. Demo bổ sung 05 - HTTPS + rewrite path
+
+Có thể kết hợp TLS với rewrite.
+
+Tạo certificate:
+
+```bash
+openssl req -x509 -nodes -days 365 \
+  -newkey rsa:2048 \
+  -keyout rewrite.lab.local.key \
+  -out rewrite.lab.local.crt \
+  -subj "/CN=rewrite.lab.local/O=Kubernetes Lab" \
+  -addext "subjectAltName=DNS:rewrite.lab.local"
+```
+
+Tạo Secret:
+
+```bash
+kubectl create secret tls rewrite-lab-local-tls \
+  --cert=rewrite.lab.local.crt \
+  --key=rewrite.lab.local.key \
+  -n ingress-path-demo
+```
+
+Tạo Ingress HTTPS + rewrite:
+
+```bash
+cat <<'EOF' > rewrite-https-ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: rewrite-ingress
+  namespace: ingress-path-demo
+  annotations:
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - rewrite.lab.local
+      secretName: rewrite-lab-local-tls
+  rules:
+    - host: rewrite.lab.local
+      http:
+        paths:
+          - path: /backend(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: rewrite-echo-svc
+                port:
+                  number: 80
+EOF
+```
+
+Apply:
+
+```bash
+kubectl apply -f rewrite-https-ingress.yaml
+```
+
+Test:
+
+```bash
+curl -k --resolve rewrite.lab.local:443:$INGRESS_IP https://rewrite.lab.local/backend/api/users
+```
+
+Kết quả kỳ vọng:
+
+```text
+backend received uri=/api/users
+```
+
+Kiểm tra redirect HTTP sang HTTPS:
+
+```bash
+curl -I --resolve rewrite.lab.local:80:$INGRESS_IP http://rewrite.lab.local/backend/api/users
+```
+
+Kết quả thường gặp:
+
+```text
+HTTP/1.1 308 Permanent Redirect
+Location: https://rewrite.lab.local/backend/api/users
+```
+
+### Q. Bảng tổng hợp các trường hợp Ingress path
+
+| Nhu cầu | path | pathType | Backend | Ghi chú |
+|---|---:|---|---|---|
+| Website chính | `/` | `Prefix` | `frontend-svc` | Match toàn bộ nếu không có path cụ thể hơn |
+| API service | `/api` | `Prefix` | `api-svc` | Match `/api`, `/api/v1`, `/api/users` |
+| Admin portal | `/admin` | `Prefix` | `admin-svc` | Match `/admin`, `/admin/users` |
+| Health check chính xác | `/healthz` | `Exact` | `health-svc` | Không match `/healthz/live` |
+| Static assets | `/static` | `Prefix` | `static-svc` | Dùng cho file CSS/JS/image |
+| Media upload | `/media` | `Prefix` | `media-svc` | Dùng cho user-uploaded content |
+| Regex rewrite | `/backend(/|$)(.*)` | `ImplementationSpecific` | `backend-svc` | Phụ thuộc Ingress NGINX |
+| Catch-all | `/` | `Prefix` | `frontend-svc` | Nên đặt sau các route cụ thể khi viết manifest |
+
+### R. Troubleshooting riêng cho HTTPS và path routing
+
+#### R.1. HTTPS báo certificate không tin cậy
+
+Nếu dùng self-signed certificate trong lab, browser báo không tin cậy là bình thường.
+
+Dùng curl:
+
+```bash
+curl -k https://web.lab.local/
+```
+
+Hoặc:
+
+```bash
+curl -k --resolve web.lab.local:443:$INGRESS_IP https://web.lab.local/
+```
+
+Trong production, cần dùng certificate được cấp bởi CA tin cậy hoặc CA nội bộ đã được client trust.
+
+#### R.2. HTTPS trả về certificate không đúng domain
+
+Kiểm tra SNI:
+
+```bash
+openssl s_client -connect $INGRESS_IP:443 -servername web.lab.local </dev/null 2>/dev/null \
+  | openssl x509 -noout -subject -issuer
+```
+
+Nếu không dùng `-servername`, server có thể trả default certificate, làm kết quả kiểm tra bị sai.
+
+Kiểm tra Secret:
+
+```bash
+kubectl get secret web-lab-local-tls -n lesson-06 -o yaml
+```
+
+Kiểm tra Ingress:
+
+```bash
+kubectl describe ingress lesson-06-web-https -n lesson-06
+```
+
+Các lỗi thường gặp:
+
+- Secret sai namespace.
+- Secret sai type.
+- Secret thiếu `tls.crt` hoặc `tls.key`.
+- Certificate không có SAN đúng domain.
+- Host trong `tls.hosts` khác host trong `rules`.
+- Client truy cập bằng IP thay vì domain.
+
+#### R.3. HTTP không redirect sang HTTPS
+
+Kiểm tra Ingress có block `tls` chưa:
+
+```bash
+kubectl get ingress <ingress-name> -n <namespace> -o yaml
+```
+
+Kiểm tra annotation có tắt redirect không:
+
+```yaml
+nginx.ingress.kubernetes.io/ssl-redirect: "false"
+```
+
+Kiểm tra ConfigMap của Ingress NGINX Controller nếu hệ thống có custom global setting.
+
+#### R.4. Path `/api` được nhưng `/api/v1/users` không được
+
+Kiểm tra `pathType`:
+
+```yaml
+pathType: Prefix
+```
+
+Nếu dùng `Exact`, `/api/v1/users` sẽ không match `/api`.
+
+Kiểm tra backend app có tự xử lý subpath đó không. Ingress route đúng chưa chắc app trả về 200. Có thể Ingress đã chuyển request vào đúng backend, nhưng app trả 404 vì app không có route tương ứng.
+
+#### R.5. Request vào `/api` nhưng backend nhận path `/api`
+
+Đây là hành vi bình thường nếu không rewrite.
+
+Ví dụ:
+
+```text
+Client gọi: /api/users
+Backend nhận: /api/users
+```
+
+Nếu backend chỉ muốn nhận:
+
+```text
+/users
+```
+
+Thì cần rewrite:
+
+```yaml
+nginx.ingress.kubernetes.io/rewrite-target: /$2
+```
+
+Và regex path phù hợp.
+
+#### R.6. Ingress trả 404
+
+404 thường là request không match host/path.
+
+Kiểm tra:
+
+```bash
+kubectl describe ingress -n ingress-path-demo
+```
+
+Test đúng Host header:
+
+```bash
+curl -H "Host: path.lab.local" http://$INGRESS_IP/api
+```
+
+Hoặc dùng `--resolve`:
+
+```bash
+curl --resolve path.lab.local:80:$INGRESS_IP http://path.lab.local/api
+```
+
+Nếu gọi trực tiếp bằng IP:
+
+```bash
+curl http://$INGRESS_IP/api
+```
+
+Có thể bị 404 vì thiếu Host header đúng.
+
+#### R.7. Ingress trả 503
+
+503 thường là đã match Ingress rule nhưng backend không có endpoint sẵn sàng.
+
+Kiểm tra:
+
+```bash
+kubectl get svc -n ingress-path-demo
+kubectl get endpointslice -n ingress-path-demo
+kubectl get pods -n ingress-path-demo --show-labels
+```
+
+Các lỗi hay gặp:
+
+- Service selector không khớp label Pod.
+- Pod chưa Running.
+- Pod không Ready.
+- targetPort sai.
+- Container không listen port đã khai báo.
+
+#### R.8. Regex hoặc rewrite chạy không như kỳ vọng
+
+Kiểm tra annotation:
+
+```yaml
+nginx.ingress.kubernetes.io/use-regex: "true"
+nginx.ingress.kubernetes.io/rewrite-target: /$2
+```
+
+Kiểm tra `pathType`:
+
+```yaml
+pathType: ImplementationSpecific
+```
+
+Kiểm tra log controller:
+
+```bash
+kubectl logs -n ingress-nginx deploy/ingress-nginx-controller --tail=100
+```
+
+Có thể inspect cấu hình NGINX sinh ra bên trong Pod controller:
+
+```bash
+kubectl exec -n ingress-nginx deploy/ingress-nginx-controller -- nginx -T | less
+```
+
+Trong môi trường không có `less`, dùng:
+
+```bash
+kubectl exec -n ingress-nginx deploy/ingress-nginx-controller -- nginx -T | grep -A20 "server_name rewrite.lab.local"
+```
+
+### S. Bài tập thực hành thêm cho học viên
+
+#### S.1. Bài tập 1 - Tạo portal có ba path
+
+Yêu cầu:
+
+- Domain: `student.lab.local`
+- `/` đi vào `home-svc`
+- `/api` đi vào `api-svc`
+- `/admin` đi vào `admin-svc`
+- Có HTTPS bằng self-signed certificate.
+- Test được bằng `curl --resolve`.
+
+#### S.2. Bài tập 2 - Exact health check
+
+Yêu cầu:
+
+- Domain: `student-health.lab.local`
+- `/healthz` dùng `Exact`, trả về `OK`.
+- `/healthz/live` dùng `Prefix`, trả về `LIVE`.
+- Chứng minh `/Healthz` không match `/healthz`.
+
+#### S.3. Bài tập 3 - Rewrite path
+
+Yêu cầu:
+
+- Domain: `student-rewrite.lab.local`
+- Public path: `/service/api/users`
+- Backend nhận path: `/api/users`
+- Dùng `rewrite-target`.
+- Dùng HTTPS.
+- Chứng minh bằng backend echo URI.
+
+### T. Dọn dẹp tài nguyên phần bổ sung
+
+Xóa toàn bộ namespace demo:
+
+```bash
+kubectl delete namespace ingress-path-demo
+```
+
+Xóa file certificate local nếu muốn:
+
+```bash
+rm -f path.lab.local.crt path.lab.local.key
+rm -f rewrite.lab.local.crt rewrite.lab.local.key
+```
+
+Nếu đã thêm hosts trên client, xóa các dòng tương ứng:
+
+```text
+path.lab.local
+exact.lab.local
+rewrite.lab.local
+```
+
+### U. Ghi nhớ nhanh cho phần bổ sung
+
+- HTTPS trong Ingress thường là TLS termination tại Ingress Controller.
+- Kubernetes dùng trường `spec.tls`, không dùng tên trường `ssl`.
+- TLS Secret phải cùng namespace với Ingress.
+- Certificate phải có SAN đúng domain.
+- `Prefix` không phải string prefix đơn giản, mà match theo path element.
+- `Exact` match chính xác và case-sensitive.
+- `ImplementationSpecific` phụ thuộc Ingress Controller, thường dùng cho regex/rewrite với Ingress NGINX.
+- Path cụ thể hơn được ưu tiên hơn path tổng quát.
+- Nếu cùng path, `Exact` được ưu tiên hơn `Prefix`.
+- Không có rewrite thì backend thường nhận nguyên path client gọi.
+- Có rewrite thì cần hiểu capture group `$1`, `$2`.
+- Khi test bằng IP trực tiếp, dễ thiếu Host header và bị 404.
+- `curl --resolve` là công cụ rất tốt để test Ingress trong lab mà không cần sửa DNS.
+
+### V. Tài liệu tham khảo bổ sung
+
+- Kubernetes Documentation - Ingress path types  
+  https://kubernetes.io/docs/concepts/services-networking/ingress/#path-types
+
+- Kubernetes Documentation - Multiple matches  
+  https://kubernetes.io/docs/concepts/services-networking/ingress/#multiple-matches
+
+- Ingress NGINX Controller - TLS/HTTPS  
+  https://kubernetes.github.io/ingress-nginx/user-guide/tls/
+
+- Ingress NGINX Controller - TLS termination example  
+  https://kubernetes.github.io/ingress-nginx/examples/tls-termination/
+
+- Ingress NGINX Controller - Ingress path matching  
+  https://kubernetes.github.io/ingress-nginx/user-guide/ingress-path-matching/
+
+- Ingress NGINX Controller - Rewrite  
+  https://kubernetes.github.io/ingress-nginx/examples/rewrite/
+
 ## 14. Lab tổng hợp cuối buổi
 
 ## 14.1. Yêu cầu bài lab
