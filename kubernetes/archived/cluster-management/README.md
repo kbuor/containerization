@@ -359,32 +359,10 @@ apt install -y kubelet
 apt-mark hold kubelet
 ```
 
-## Upgrade `kubectl` package
-
-> Upgrade `kubectl` package
-```shell
-apt-mark unhold kubectl
-apt install -y kubeadm
-apt-mark hold kubectl
-```
-
-> Check current version of `kubeadm`
-```shell
-kubeadm version -o short
-```
-
-> Check current version of `kubectl` `api & master components`
-```shell
-kubectl version --short
-```
 -----------
 # Upgrade Node
 Upgrade the Master by upgrade `kubelet`
 
-> Check current version of `kubeadm`
-```shell
-kubeadm version -o short
-```
 
 ## Upgrade `kubelet` package
 
@@ -395,18 +373,4 @@ apt update -y
 echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.36/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list
 apt install -y kubelet
 apt-mark hold kubelet
-```
-
-## Upgrade `kubectl` package
-
-> Upgrade `kubectl` package
-```shell
-apt-mark unhold kubectl
-apt install -y kubeadm
-apt-mark hold kubectl
-```
-
-> Check current version of `kubectl` `api & master components`
-```shell
-kubectl version --short
 ```
