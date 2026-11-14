@@ -323,12 +323,6 @@ curl -sS https://webinstall.dev/k9s | bash
 kubeadm version -o short
 ```
 
-> Check current version of `kubectl` `api & master components`
-```shell
-kubectl version --short
-```
-
-
 ## Upgrade `kubeadm` package
 
 > Upgrade `kubeadm` package
@@ -389,11 +383,6 @@ Upgrade the Master by upgrade `kubelet`
 > Check current version of `kubeadm`
 ```shell
 kubeadm version -o short
-```
-
-> Check current version of `kubectl` `api & master components`
-```shell
-kubectl version --short
 ```
 
 ## Upgrade `kubelet` package
