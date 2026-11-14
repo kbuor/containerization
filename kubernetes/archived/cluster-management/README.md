@@ -334,7 +334,8 @@ kubectl version --short
 > Upgrade `kubeadm` package
 ```shell
 apt-mark unhold kubeadm
-apt install -y kubeadm=1.27.3-00
+echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.36/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list
+apt install -y kubeadm
 apt-mark hold kubeadm
 ```
 
@@ -359,7 +360,7 @@ kubeadm upgrade apply <plan>
 > Upgrade `kubelet` package
 ```shell
 apt-mark unhold kubelet
-apt install -y kubelet=1.27.3-00
+apt install -y kubelet
 apt-mark hold kubelet
 ```
 
@@ -368,7 +369,7 @@ apt-mark hold kubelet
 > Upgrade `kubectl` package
 ```shell
 apt-mark unhold kubectl
-apt install -y kubeadm=1.27.3-00
+apt install -y kubeadm
 apt-mark hold kubectl
 ```
 
@@ -395,27 +396,13 @@ kubeadm version -o short
 kubectl version --short
 ```
 
-## Cordon the Node
-
-> Cordon the Node using `kubectl` command
-```shell
-kubectl cordon k8s-node-01
-```
-
-## Drain the Node
-
-> Drain the Node using `kubectl` command
-
-```shell
-kubectl drain k8s-node-01
-```
-
 ## Upgrade `kubelet` package
 
 > Upgrade `kubelet` package
 ```shell
 apt-mark unhold kubelet
-apt install -y kubelet=1.27.3-00
+echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.36/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list
+apt install -y kubelet
 apt-mark hold kubelet
 ```
 
@@ -424,19 +411,8 @@ apt-mark hold kubelet
 > Upgrade `kubectl` package
 ```shell
 apt-mark unhold kubectl
-apt install -y kubeadm=1.27.3-00
+apt install -y kubeadm
 apt-mark hold kubectl
-```
-
-## UnCordon the Node
-
-> UnCordon the Node using `kubectl` command
-```shell
-kubectl uncordon k8s-node-01
-```
-> Check current version of `kubeadm`
-```shell
-kubeadm version -o short
 ```
 
 > Check current version of `kubectl` `api & master components`
