@@ -369,8 +369,8 @@ Upgrade the Master by upgrade `kubelet`
 > Upgrade `kubelet` package
 ```shell
 apt-mark unhold kubelet
-apt update -y
 echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.36/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list
+apt update -y
 apt install -y kubelet
 apt-mark hold kubelet
 ```
